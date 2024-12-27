@@ -50,6 +50,20 @@
     async function initMap() {
       const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
 
+      map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 46.5196535, lng: 6.6322734 }, // Lausanne
+        zoom: 12,
+        restriction: {
+          latLngBounds: {
+            north: 47.8084,
+            south: 45.818,
+            west: 5.9559,
+            east: 10.4921,
+          },
+          strictBounds: true,
+        }
+      });
+
       try {
         const response = await fetch(csvUrl);
         if (!response.ok) {
@@ -71,20 +85,6 @@
             const entites = [...new Set(data.map(item => item.Entité))];
             entites.forEach((entite, index) => {
               couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
-            });
-
-            map = new google.maps.Map(document.getElementById("map"), {
-              center: { lat: 46.5196535, lng: 6.6322734 }, // Lausanne
-              zoom: 12,
-              restriction: {
-                latLngBounds: {
-                  north: 47.8084,
-                  south: 45.818,
-                  west: 5.9559,
-                  east: 10.4921,
-                },
-                strictBounds: true,
-              }
             });
 
             createMarkers(data);
@@ -124,7 +124,7 @@
           let infoWindowContent = `<div style="padding: 10px;">`;
           for (const key in row) {
             if (row.hasOwnProperty(key)) {
-              infoWindowContent += `<p><b>${key}:</b> ${row[key]}</p>`;
+              infoWindowContent += `<p><b>${key}:</b> ${row[key] !== undefined ? row[key] : 'Non renseigné'}</p>`;
             }
           }
           infoWindowContent += `</div>`;
