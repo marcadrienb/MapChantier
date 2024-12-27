@@ -2,30 +2,73 @@
 <html>
 <head>
     <title>Carte des chantiers</title>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        /* ... styles (inchangés) ... */
+        #map {
+            height: 600px; /* Hauteur de la carte */
+            width: 100%;    /* Largeur de la carte */
+        }
+        #menu {
+          position: absolute; /* Positionnement absolu pour le menu */
+          top: 10px; /* Marge depuis le haut */
+          left: 10px; /* Marge depuis la gauche */
+          background-color: white;
+          padding: 10px;
+          border: 1px solid #ccc;
+          z-index: 1000; /* Assure que le menu est au-dessus de la carte */
+        }
+        .checkbox-container {
+            margin-bottom: 5px; /* Espacement entre les cases à cocher */
+        }
+        .legend{
+            display:flex;
+            align-items: center;
+        }
+        .legend-color{
+            width:20px;
+            height:20px;
+            margin-right:5px;
+        }
     </style>
+    <script src="https://unpkg.com/@googlemaps/markerclustererplus/dist/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <script defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry"></script>
+
     <script>
-        // ... variables (inchangées) ...
+        let map;
+        let markers = [];
+        let data = [];
 
         async function initMap() {
-          // ... (récupération et parsing du CSV inchangés)
+            try {
+                const response = await fetch('data.csv'); // Remplacez 'data.csv' par le chemin de votre fichier CSV
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP! statut : ${response.status}`);
+                }
+                const csvText = await response.text();
+                data = Papa.parse(csvText, { header: true, dynamicTyping: true }).data;
 
-                        map = new google.maps.Map(document.getElementById("map"), {
-                            center: { lat: 46.8182, lng: 8.2275 }, // Centre par défaut sur la Suisse, sera ajusté
-                            zoom: 8,
-                            restriction: {
-                                // ... (restriction inchangée)
-                            }
-                        });
+                map = new google.maps.Map(document.getElementById("map"), {
+                    center: { lat: 46.8182, lng: 8.2275 }, // Centre par défaut sur la Suisse
+                    zoom: 8,
+                    restriction: {
+                                latLngBounds: {
+                                    north: 47.8,
+                                    south: 45.8,
+                                    west: 5.8,
+                                    east: 10.5
+                                },
+                            },
+                });
 
-                        createMarkers(data);
-                        centerMapOnMostMarkers(data); // Nouvelle fonction pour centrer la carte
-                        createMenu();
-                    },
-                    // ... (gestion des erreurs inchangée)
+                createMarkers(data);
+                centerMapOnMostMarkers(data);
+                createMenu();
+            } catch (error) {
+                console.error('Erreur lors du chargement ou du traitement du CSV ou de la carte:', error);
+                document.getElementById('map').innerHTML = "<p style='color:red'>Erreur lors du chargement de la carte ou des données. Veuillez vérifier la console pour plus de détails.</p>";
+            }
         }
 
         function centerMapOnMostMarkers(data) {
@@ -39,7 +82,7 @@
 
                 data.forEach(row => {
                     if (row && !isNaN(row.Latitude) && !isNaN(row.Longitude)) {
-                        const latLngString = `${row.Latitude.toFixed(4)},${row.Longitude.toFixed(4)}`; // arrondir pour grouper les positions proches
+                        const latLngString = `${row.Latitude.toFixed(4)},${row.Longitude.toFixed(4)}`;
                         markerCounts[latLngString] = (markerCounts[latLngString] || 0) + 1;
                     }
                 });
@@ -53,7 +96,7 @@
                 }
                 if (centerLat && centerLng) {
                   map.setCenter({ lat: centerLat, lng: centerLng });
-                  map.setZoom(10); // Zoom plus proche si centré sur un groupe
+                  map.setZoom(10);
                 }
                 else {
                   data.forEach(row => {
@@ -67,7 +110,32 @@
         }
 
         function createMarkers(data) {
-           // ... (création des marqueurs inchangée)
+          const couleursEntites = {};
+          const entites = [...new Set(data.map(item => item.Entité).filter(Boolean))];
+          entites.forEach((entite, index) => {
+              couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
+          });
+            data.forEach(row => {
+                if (row && !isNaN(row.Latitude) && !isNaN(row.Longitude)) {
+                    const marker = new google.maps.Marker({
+                        position: { lat: row.Latitude, lng: row.Longitude },
+                        map: map,
+                        label: row.Nom,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 5,
+                            fillColor: couleursEntites[row.Entité] || "black",
+                            fillOpacity: 0.8,
+                            strokeColor: "black",
+                            strokeWeight: 1,
+                        }
+                    });
+                    markers.push(marker);
+                }
+            });
+            const markerCluster = new MarkerClusterer(map, markers, {
+                imagePath: 'https://developers.google.com/maps/documentation/javascript/examples/markerclusterer/m'
+            });
         }
 
         function createMenu() {
@@ -81,7 +149,7 @@
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.id = entite;
-                checkbox.checked = true; // Toutes les entités affichées par défaut
+                checkbox.checked = true;
                 checkbox.addEventListener('change', filterMarkersByEntity);
 
                 const label = document.createElement('label');
@@ -92,7 +160,6 @@
                 checkboxContainer.appendChild(label);
                 menu.appendChild(checkboxContainer);
             });
-          //Création de la légende
             const couleursEntites = {};
             entites.forEach((entite, index) => {
                 couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
