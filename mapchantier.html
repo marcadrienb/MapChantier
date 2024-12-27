@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Carte des adresses</title>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE"></script>
+  <script>
+    async function initMap() {
+      // Lien vers votre fichier Google Sheets publié en CSV
+      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
+
+      // Récupérer les données CSV
+      const response = await fetch(csvUrl);
+      const data = await response.text();
+
+      // Séparer les lignes (ignorer la première ligne d'en-têtes)
+      const rows = data.split("\n").slice(1);
+
+      // Initialiser la carte
+      const map = new google.maps.Map(document.getElementById("map"), {
+        center: { lat: 46.5191, lng: 6.5668 }, // Suisse comme centre initial
+        zoom: 8,
+      });
+
+      // Associer les entités à des couleurs
+      const couleursEntites = {
+        "Entité A": "red",
+        "Entité B": "blue",
+        "Entité C": "green",
+      };
+
+      // Parcourir chaque ligne du CSV pour créer des marqueurs
+      rows.forEach((row) => {
+        const cols = row.split(",");
+
+        // Extraire les données nécessaires
+        const latitude = parseFloat(cols[5]); // Colonne Latitude
+        const longitude = parseFloat(cols[6]); // Colonne Longitude
+        const valeur = cols[8]; // Colonne CA+0
+        const entite = cols[7]; // Colonne Entité
+
+        // Vérifier que les coordonnées sont valides
+        if (!isNaN(latitude) && !isNaN(longitude)) {
+          const marker = new google.maps.Marker({
+            position: { lat: latitude, lng: longitude },
+            map: map,
+            title: `Valeur : ${valeur}`, // Info au survol
+            icon: {
+              path: google.maps.SymbolPath.CIRCLE,
+              scale: 10,
+              fillColor: couleursEntites[entite] || "gray", // Couleur selon l'entité
+              fillOpacity: 1,
+              strokeWeight: 1,
+            },
+          });
+
+          // Ajouter une info-bulle (info window)
+          const infoWindow = new google.maps.InfoWindow({
+            content: `<b>Valeur :</b> ${valeur} <br><b>Entité :</b> ${entite}`,
+          });
+
+          // Afficher l'info-bulle au clic sur le marqueur
+          marker.addListener("click", () => infoWindow.open(map, marker));
+        }
+      });
+    }
+  </script>
+</head>
+<body onload="initMap()">
+  <div id="map" style="height: 100vh; width: 100%;"></div>
+</body>
+</html>
