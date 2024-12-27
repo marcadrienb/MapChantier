@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>Carte des chantiers</title>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE" async defer></script>
   <script>
     async function initMap() {
       // Lien vers votre fichier Google Sheets publié en CSV
@@ -33,17 +33,19 @@
         const cols = row.split(",");
 
         // Extraire les données nécessaires
-        const latitude = parseFloat(cols[5]); // Colonne Latitude
-        const longitude = parseFloat(cols[6]); // Colonne Longitude
-        const valeur = cols[9]; // Colonne CA+0
-        const entite = cols[8]; // Colonne Entité
+        const numeroChantier = cols[0]; // Colonne A (N° de chantier)
+        const latitude = parseFloat(cols[6]); // Colonne Latitude (G)
+        const longitude = parseFloat(cols[7]); // Colonne Longitude (H)
+        const valeur = cols[9]; // Colonne CA+0 (J)
+        const entite = cols[8]; // Colonne Entité (I)
+        const entretien = cols[10]; // Colonne Entretien (K)
 
         // Vérifier que les coordonnées sont valides
         if (!isNaN(latitude) && !isNaN(longitude)) {
           const marker = new google.maps.Marker({
             position: { lat: latitude, lng: longitude },
             map: map,
-            title: `Valeur : ${valeur}`, // Info au survol
+            title: `N° Chantier : ${numeroChantier}`, // Info au survol
             icon: {
               path: google.maps.SymbolPath.CIRCLE,
               scale: 10,
@@ -55,7 +57,10 @@
 
           // Ajouter une info-bulle (info window)
           const infoWindow = new google.maps.InfoWindow({
-            content: `<b>Valeur :</b> ${valeur} <br><b>Entité :</b> ${entite}`,
+            content: `<b>N° Chantier :</b> ${numeroChantier} <br>
+                      <b>Valeur :</b> ${valeur} <br>
+                      <b>Entité :</b> ${entite} <br>
+                      <b>Entretien :</b> ${entretien}`,
           });
 
           // Afficher l'info-bulle au clic sur le marqueur
