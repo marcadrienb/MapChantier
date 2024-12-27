@@ -5,21 +5,25 @@
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
+    body {
+      display: flex;
+      margin: 0;
+      height: 100vh;
+    }
     #map {
-      height: 80vh;
-      width: 100%;
+      flex: 1;
+      height: 100%;
     }
     #menu {
-      height: 20vh;
+      width: 300px;
+      height: 100%;
       overflow-y: auto;
       padding: 10px;
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-around;
+      box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
+      background-color: #f9f9f9;
     }
     .checkbox-container {
       margin-bottom: 5px;
-      min-width: 150px;
     }
     .legend {
       display: flex;
@@ -157,15 +161,15 @@
         menu.appendChild(checkboxContainer);
       });
 
-        const legendDiv = document.createElement('div');
-        legendDiv.innerHTML = "<h3>Légende des entités:</h3>";
-        for (const entite in couleursEntites) {
-            const legendItem = document.createElement('div');
-            legendItem.className = "legend";
-            legendItem.innerHTML = `<div class="legend-color" style="background-color:${couleursEntites[entite]}"></div><span>${entite}</span>`;
-            legendDiv.appendChild(legendItem);
-        }
-        menu.appendChild(legendDiv);
+      const legendDiv = document.createElement('div');
+      legendDiv.innerHTML = "<h3>Légende des entités:</h3>";
+      for (const entite in couleursEntites) {
+        const legendItem = document.createElement('div');
+        legendItem.className = "legend";
+        legendItem.innerHTML = `<div class="legend-color" style="background-color:${couleursEntites[entite]}"></div><span>${entite}</span>`;
+        legendDiv.appendChild(legendItem);
+      }
+      menu.appendChild(legendDiv);
     }
 
     function filterMarkers() {
