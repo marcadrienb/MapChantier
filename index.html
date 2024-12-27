@@ -5,14 +5,38 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <style>
-        /* ... (styles CSS inchangés) */
+        #map {
+            height: 80vh;
+            width: 100%;
+        }
+        #menu {
+            height: 20vh;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .checkbox-container {
+            margin-bottom: 5px;
+            min-width: 150px;
+        }
+        .legend {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
     </style>
 </head>
 <body onload="initMap()">
-    <div id="container">
-        <div id="map"></div>
-        <div id="menu"></div>
-    </div>
+    <div id="map"></div>
+    <div id="menu"></div>
     <script>
         let map;
         let markers = [];
@@ -27,7 +51,7 @@
                 if (!response.ok) {
                     throw new Error(`Erreur HTTP : ${response.status}`);
                 }
-                const csvText = await response.text(); // Déclaration et assignation CORRECTES
+                const csvText = await response.text();
 
                 Papa.parse(csvText, {
                     header: true,
@@ -35,26 +59,24 @@
                     complete: function(results) {
                         data = results.data;
 
+                        // Filtrer les données AVANT de créer la carte et les marqueurs
                         data = data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
 
                         if (data.length === 0) {
                             console.error("Aucune donnée valide trouvée dans le CSV.");
-                            return;
+                            return; // Arrêter l'initialisation
                         }
 
+                        // Calculer les couleurs des entités UNE SEULE FOIS, après le filtrage
                         const entites = [...new Set(data.map(item => item.Entité))];
                         entites.forEach((entite, index) => {
                             couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
                         });
 
-                        const bounds = new google.maps.LatLngBounds();
-                        data.forEach(row => {
-                            bounds.extend(new google.maps.LatLng(row.Latitude, row.Longitude));
-                        });
-
+                        // Initialiser la carte APRÈS avoir reçu et traité les données
                         map = new google.maps.Map(document.getElementById("map"), {
-                            center: bounds.getCenter(),
-                            zoom: calculateZoom(bounds),
+                            center: { lat: 46.8182, lng: 8.2275 },
+                            zoom: 8,
                             restriction: {
                                 latLngBounds: {
                                     north: 47.8084,
@@ -78,10 +100,90 @@
             }
         }
 
-        function calculateZoom(bounds) { /* ... (fonction inchangée) */ }
-        function createMarkers(data) { /* ... (fonction inchangée) */ }
-        function createMenu() { /* ... (fonction inchangée) */ }
-        function filterMarkers() { /* ... (fonction inchangée) */ }
+        function createMarkers(data) {
+            let latLngBounds = new google.maps.LatLngBounds();
+
+            data.forEach(row => {
+                let latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
+                latLngBounds.extend(latLng);
+
+                const marker = new google.maps.Marker({
+                    position: latLng,
+                    map: map,
+                    title: `N° Chantier : ${row["N° de chantier"]}`,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: Math.sqrt(row["CA+0"] / 100000) * 5 || 5,
+                        fillColor: couleursEntites[row.Entité],
+                        fillOpacity: 0.7,
+                        strokeWeight: 1,
+                    },
+                });
+
+                let infoWindowContent = `<div style="padding: 10px;">`;
+                for (const key in row) {
+                    if (row.hasOwnProperty(key)) {
+                        infoWindowContent += `<p><b>${key}:</b> ${row[key]}</p>`;
+                    }
+                }
+                infoWindowContent += `</div>`;
+
+                const infoWindow = new google.maps.InfoWindow({
+                    content: infoWindowContent,
+                });
+
+                marker.addListener("click", () => infoWindow.open(map, marker));
+                markers.push(marker);
+            });
+            map.fitBounds(latLngBounds);
+        }
+
+        function createMenu() {
+            const menu = document.getElementById('menu');
+            menu.innerHTML = ""; // Nettoyer le menu avant de le recréer
+
+            const entites = Object.keys(couleursEntites);
+            entites.forEach(entite => {
+                const checkboxContainer = document.createElement('div');
+                checkboxContainer.className = 'checkbox-container';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.id = entite;
+                checkbox.checked = true;
+                checkbox.addEventListener('change', filterMarkers);
+
+                const label = document.createElement('label');
+                label.htmlFor = entite;
+                label.textContent = entite;
+
+                checkboxContainer.appendChild(checkbox);
+                checkboxContainer.appendChild(label);
+                menu.appendChild(checkboxContainer);
+            });
+
+            const legendDiv = document.createElement('div');
+            legendDiv.innerHTML = "<h3>Légende des entités:</h3>";
+            for (const entite in couleursEntites) {
+                const legendItem = document.createElement('div');
+                legendItem.className = "legend";
+                legendItem.innerHTML = `<div class="legend-color" style="background-color:${couleursEntites[entite]}"></div><span>${entite}</span>`;
+                legendDiv.appendChild(legendItem);
+            }
+            menu.appendChild(legendDiv);
+        }
+
+        function filterMarkers() {
+            const checkedEntites = Array.from(document.querySelectorAll('#menu input:checked')).map(input => input.id);
+
+            markers.forEach((marker, index) => {
+                const row = data[index];
+                if (row) {
+                    const entiteMarker = row.Entité;
+                    marker.setVisible(checkedEntites.includes(entiteMarker));
+                }
+            });
+        }
     </script>
 </body>
 </html>
