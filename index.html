@@ -2,16 +2,46 @@
 <html>
 <head>
     <title>Carte des chantiers</title>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=geometry" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <style>
-        /* ... (Styles CSS inchangés) */
+        #map {
+            height: 80vh;
+            width: 100%;
+        }
+        #menu {
+            height: 20vh;
+            overflow-y: auto;
+            padding: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        .checkbox-container {
+            margin-bottom: 5px;
+            min-width: 150px;
+        }
+        .legend {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
     </style>
+</head>
+<body onload="initMap()">
+    <div id="map"></div>
+    <div id="menu"></div>
     <script>
         let map;
         let markers = [];
         let data;
-        let couleursEntites = {}; // Stocke les couleurs par entité
+        let couleursEntites = {};
 
         async function initMap() {
             const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
@@ -21,28 +51,29 @@
                 if (!response.ok) {
                     throw new Error(`Erreur HTTP : ${response.status}`);
                 }
-                const csvData = await response.text();
+                const csvText = await response.text();
 
-                Papa.parse(csvData, {
+                Papa.parse(csvText, {
                     header: true,
                     dynamicTyping: true,
                     complete: function(results) {
                         data = results.data;
 
-                        // Filtrer les données pour retirer les lignes vides ou incorrectes AVANT de créer la carte et les marqueurs
+                        // Filtrer les données AVANT de créer la carte et les marqueurs
                         data = data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
 
                         if (data.length === 0) {
                             console.error("Aucune donnée valide trouvée dans le CSV.");
-                            return; // Arrêter l'initialisation si aucune donnée valide
+                            return; // Arrêter l'initialisation
                         }
 
-                        // Calculer les couleurs des entités UNE SEULE FOIS, après le filtrage des données
+                        // Calculer les couleurs des entités UNE SEULE FOIS, après le filtrage
                         const entites = [...new Set(data.map(item => item.Entité))];
                         entites.forEach((entite, index) => {
                             couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
                         });
 
+                        // Initialiser la carte APRÈS avoir reçu et traité les données
                         map = new google.maps.Map(document.getElementById("map"), {
                             center: { lat: 46.8182, lng: 8.2275 },
                             zoom: 8,
@@ -83,14 +114,25 @@
                     icon: {
                         path: google.maps.SymbolPath.CIRCLE,
                         scale: Math.sqrt(row["CA+0"] / 100000) * 5 || 5,
-                        fillColor: couleursEntites[row.Entité], // Utilise les couleurs pré-calculées
+                        fillColor: couleursEntites[row.Entité],
                         fillOpacity: 0.7,
                         strokeWeight: 1,
                     },
                 });
 
-                // ... (Code de la fenêtre d'information inchangé)
+                let infoWindowContent = `<div style="padding: 10px;">`;
+                for (const key in row) {
+                    if (row.hasOwnProperty(key)) {
+                        infoWindowContent += `<p><b>${key}:</b> ${row[key]}</p>`;
+                    }
+                }
+                infoWindowContent += `</div>`;
 
+                const infoWindow = new google.maps.InfoWindow({
+                    content: infoWindowContent,
+                });
+
+                marker.addListener("click", () => infoWindow.open(map, marker));
                 markers.push(marker);
             });
             map.fitBounds(latLngBounds);
@@ -136,16 +178,12 @@
 
             markers.forEach((marker, index) => {
                 const row = data[index];
-                if (row) { // Vérification que la ligne existe bien
+                if (row) {
                     const entiteMarker = row.Entité;
                     marker.setVisible(checkedEntites.includes(entiteMarker));
                 }
             });
         }
     </script>
-</head>
-<body onload="initMap()">
-    <div id="map"></div>
-    <div id="menu"></div>
 </body>
 </html>
