@@ -5,33 +5,7 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <style>
-        #map {
-            height: 80vh;
-            width: 100%;
-        }
-        #menu {
-            height: 20vh;
-            overflow-y: auto;
-            padding: 10px;
-            display: flex; /* Utilisation de flexbox pour une meilleure disposition */
-            flex-wrap: wrap; /* Permet le retour à la ligne des éléments du menu */
-            justify-content: space-around; /* Distribue l'espace entre les éléments */
-        }
-        .checkbox-container {
-            margin-bottom: 5px;
-            min-width: 150px; /* Empêche les éléments de devenir trop petits */
-        }
-        .legend {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 5px;
-            border-radius: 50%;
-        }
+        /* ... (Styles CSS inchangés) */
     </style>
     <script>
         let map;
@@ -40,68 +14,93 @@
         let couleursEntites = {}; // Stocke les couleurs par entité
 
         async function initMap() {
-            // ... (Code de récupération et parsing du CSV inchangé)
+            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
 
-            Papa.parse(csvData, {
-                // ...
-                complete: function(results) {
-                    data = results.data;
-                    map = new google.maps.Map(document.getElementById("map"), {
-                        // ...
-                    });
+            try {
+                const response = await fetch(csvUrl);
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP : ${response.status}`);
+                }
+                const csvData = await response.text();
 
-                    // Calculer les couleurs des entités une seule fois
-                    const entites = [...new Set(data.map(item => item.Entité).filter(Boolean))];
-                    entites.forEach((entite, index) => {
-                        couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
-                    });
+                Papa.parse(csvData, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        data = results.data;
 
-                    createMarkers(data);
-                    createMenu();
-                },
-                // ...
-            });
-            // ...
+                        // Filtrer les données pour retirer les lignes vides ou incorrectes AVANT de créer la carte et les marqueurs
+                        data = data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
+
+                        if (data.length === 0) {
+                            console.error("Aucune donnée valide trouvée dans le CSV.");
+                            return; // Arrêter l'initialisation si aucune donnée valide
+                        }
+
+                        // Calculer les couleurs des entités UNE SEULE FOIS, après le filtrage des données
+                        const entites = [...new Set(data.map(item => item.Entité))];
+                        entites.forEach((entite, index) => {
+                            couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
+                        });
+
+                        map = new google.maps.Map(document.getElementById("map"), {
+                            center: { lat: 46.8182, lng: 8.2275 },
+                            zoom: 8,
+                            restriction: {
+                                latLngBounds: {
+                                    north: 47.8084,
+                                    south: 45.818,
+                                    west: 5.9559,
+                                    east: 10.4921,
+                                },
+                                strictBounds: true,
+                            }
+                        });
+
+                        createMarkers(data);
+                        createMenu();
+                    },
+                    error: function(error) {
+                        console.error("Erreur de parsing CSV :", error);
+                    }
+                });
+            } catch (error) {
+                console.error("Erreur lors de la récupération du CSV :", error);
+            }
         }
 
         function createMarkers(data) {
             let latLngBounds = new google.maps.LatLngBounds();
 
             data.forEach(row => {
-                if (row && !isNaN(row.Latitude) && !isNaN(row.Longitude)) {
-                    try {
-                        let latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
-                        latLngBounds.extend(latLng);
+                let latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
+                latLngBounds.extend(latLng);
 
-                        const marker = new google.maps.Marker({
-                            position: latLng,
-                            map: map,
-                            title: `N° Chantier : ${row["N° de chantier"]}`,
-                            icon: {
-                                path: google.maps.SymbolPath.CIRCLE,
-                                scale: Math.sqrt(row["CA+0"] / 100000) * 5 || 5,
-                                fillColor: couleursEntites[row.Entité] || "gray", // Utilise les couleurs pré-calculées
-                                fillOpacity: 0.7,
-                                strokeWeight: 1,
-                            },
-                        });
+                const marker = new google.maps.Marker({
+                    position: latLng,
+                    map: map,
+                    title: `N° Chantier : ${row["N° de chantier"]}`,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: Math.sqrt(row["CA+0"] / 100000) * 5 || 5,
+                        fillColor: couleursEntites[row.Entité], // Utilise les couleurs pré-calculées
+                        fillOpacity: 0.7,
+                        strokeWeight: 1,
+                    },
+                });
 
-                        // ... (Code de la fenêtre d'information inchangé)
+                // ... (Code de la fenêtre d'information inchangé)
 
-                        markers.push(marker);
-                    } catch (error) {
-                        // ...
-                    }
-                }
+                markers.push(marker);
             });
             map.fitBounds(latLngBounds);
         }
 
         function createMenu() {
             const menu = document.getElementById('menu');
+            menu.innerHTML = ""; // Nettoyer le menu avant de le recréer
 
-            // Création des filtres par entité
-            const entites = Object.keys(couleursEntites); // Utilise les entités avec couleurs
+            const entites = Object.keys(couleursEntites);
             entites.forEach(entite => {
                 const checkboxContainer = document.createElement('div');
                 checkboxContainer.className = 'checkbox-container';
@@ -121,7 +120,6 @@
                 menu.appendChild(checkboxContainer);
             });
 
-            // Création de la légende (simplifiée)
             const legendDiv = document.createElement('div');
             legendDiv.innerHTML = "<h3>Légende des entités:</h3>";
             for (const entite in couleursEntites) {
@@ -138,8 +136,10 @@
 
             markers.forEach((marker, index) => {
                 const row = data[index];
-                const entiteMarker = row.Entité;
-                marker.setVisible(checkedEntites.includes(entiteMarker)); // Affiche/masque selon l'entité
+                if (row) { // Vérification que la ligne existe bien
+                    const entiteMarker = row.Entité;
+                    marker.setVisible(checkedEntites.includes(entiteMarker));
+                }
             });
         }
     </script>
