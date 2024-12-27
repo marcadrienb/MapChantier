@@ -6,8 +6,13 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
     #map {
-      height: 100vh;
+      height: 80vh; /* Réduit la hauteur pour laisser de la place au filtre */
       width: 100%;
+    }
+    #entity-filter {
+        padding: 10px;
+        border-bottom: 1px solid #ccc;
+        margin-bottom: 10px;
     }
   </style>
   <script>
@@ -26,10 +31,8 @@
           dynamicTyping: true,
           complete: function(results) {
             const data = results.data;
-            console.log("Données CSV parsées :", data);
 
             const map = new google.maps.Map(document.getElementById("map"), {
-              center: { lat: 46.5191, lng: 6.5668 },
               zoom: 8,
             });
 
@@ -39,66 +42,129 @@
               "300 - Entité C": "green",
             };
 
-            // Entity markers and counts
             const entityMarkers = {};
-            let mostAddressesEntity = "";
-            let mostAddressesCount = 0;
+            let mostAddressesEntity = null;
+            let maxAddressesCount = 0;
+            let currentMarkers = []; // Tableau pour stocker les marqueurs actuels
 
-            data.forEach(row => {
-              if (row && !isNaN(row.Latitude) && !isNaN(row.Longitude)) {
-                try {
-                  const latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
+            const entityFilterDiv = document.getElementById('entity-filter');
 
-                  const entity = row.Entité;
+            function createFilterCheckboxes() {
+              const uniqueEntities = [...new Set(data.map(row => row.Entité).filter(Boolean))]; // Récupérer les entités uniques
 
-                  // Create or update entity marker array
-                  if (!entityMarkers[entity]) {
-                    entityMarkers[entity] = [];
-                  }
-                  entityMarkers[entity].push(latLng);
-
-                  // Track entity with most addresses
-                  if (entityMarkers[entity].length > mostAddressesCount) {
-                    mostAddressesEntity = entity;
-                    mostAddressesCount = entityMarkers[entity].length;
-                  }
-
-                  const marker = new google.maps.Marker({
-                    position: latLng,
-                    map: map,
-                    title: `N° Chantier : ${row["N° de chantier"]}`,
-                    icon: {
-                      path: google.maps.SymbolPath.CIRCLE,
-                      scale: 10,
-                      fillColor: couleursEntites[entity] || "gray",
-                      fillOpacity: 1,
-                      strokeWeight: 1,
-                    },
-                  });
-
-                  const infoWindowContent = `
-                    <div style="padding: 10px;">
-                      <h3>N° Chantier : ${row["N° de chantier"]}</h3>
-                      <p><b>Valeur :</b> ${row["CA+0"]}</p>
-                      <p><b>Entité :</b> ${row.Entité}</p>
-                      <p><b>Entretien :</b> ${row.Entretien}</p>
-                    </div>
-                  `;
-
-                  const infoWindow = new google.maps.InfoWindow({
-                    content: infoWindowContent,
-                  });
-
-                  marker.addListener("click", () => infoWindow.open(map, marker));
-                } catch (error) {
-                  console.error(`Erreur lors de la création du marqueur : ${error}, pour les coordonnées : Latitude ${row.Latitude}, Longitude ${row.Longitude}`);
-                }
-              }
-            });
-
-            // Center map on entity with most addresses (if any)
-            if (mostAddressesEntity) {
-              const entityBounds = new google.maps.LatLngBounds();
-              entityMarkers[mostAddressesEntity].forEach(latLng => entityBounds.extend(latLng));
-              map.fitBounds(entityBounds);
+                uniqueEntities.forEach(entity => {
+                    const label = document.createElement('label');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = entity;
+                    checkbox.checked = true; // Toutes les entités cochées par défaut
+                    label.appendChild(checkbox);
+                    label.appendChild(document.createTextNode(` ${entity}`));
+                    entityFilterDiv.appendChild(label);
+                    entityFilterDiv.appendChild(document.createElement('br'));
+                });
             }
+
+            createFilterCheckboxes();
+
+            const entityCheckboxes = document.querySelectorAll('#entity-filter input[type="checkbox"]');
+
+            function updateMapMarkers() {
+              // Supprimer les marqueurs actuels
+              currentMarkers.forEach(marker => marker.setMap(null));
+              currentMarkers = [];
+
+              const selectedEntities = Array.from(entityCheckboxes)
+                .filter(checkbox => checkbox.checked)
+                .map(checkbox => checkbox.value);
+
+              const filteredData = data.filter(row => row && row.Entité && selectedEntities.includes(row.Entité) && !isNaN(row.Latitude) && !isNaN(row.Longitude));
+
+                // Réinitialiser les variables pour le centrage
+                mostAddressesEntity = null;
+                maxAddressesCount = 0;
+                entityMarkers = {};
+
+              filteredData.forEach(row => {
+                const latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
+                const entity = row.Entité;
+
+                  if (!entityMarkers[entity]) {
+                    entityMarkers[entity] = { markers: [], count: 0 };
+                  }
+
+                  entityMarkers[entity].markers.push(latLng);
+                  entityMarkers[entity].count++;
+
+                  if (entityMarkers[entity].count > maxAddressesCount) {
+                      maxAddressesCount = entityMarkers[entity].count;
+                      mostAddressesEntity = entity;
+                  }
+
+                const marker = new google.maps.Marker({
+                  position: latLng,
+                  map: map,
+                  title: `N° Chantier : ${row["N° de chantier"]}`,
+                  icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 10,
+                    fillColor: couleursEntites[entity] || "gray",
+                    fillOpacity: 1,
+                    strokeWeight: 1,
+                  },
+                });
+
+                currentMarkers.push(marker); // Ajouter le marqueur au tableau
+
+                const infoWindowContent = `
+                  <div style="padding: 10px;">
+                    <h3>N° Chantier : ${row["N° de chantier"]}</h3>
+                    <p><b>Valeur :</b> ${row["CA+0"]}</p>
+                    <p><b>Entité :</b> ${row.Entité}</p>
+                    <p><b>Entretien :</b> ${row.Entretien}</p>
+                  </div>
+                `;
+
+                const infoWindow = new google.maps.InfoWindow({
+                  content: infoWindowContent,
+                });
+
+                marker.addListener("click", () => infoWindow.open(map, marker));
+              });
+                if (mostAddressesEntity) {
+                    const bounds = new google.maps.LatLngBounds();
+                    entityMarkers[mostAddressesEntity].markers.forEach(latLng => bounds.extend(latLng));
+                    map.fitBounds(bounds);
+                } else if (filteredData.length > 0) {
+                    // Si aucune entité n'a le plus de marqueurs mais qu'il y a des marqueurs, on les affiche tous
+                    const bounds = new google.maps.LatLngBounds();
+                    filteredData.forEach(row => bounds.extend({lat: row.Latitude, lng: row.Longitude}));
+                    map.fitBounds(bounds);
+                }
+                else {
+                    map.setCenter({ lat: 46.5191, lng: 6.5668 }); // Centre par défaut si aucune donnée filtrée
+                }
+            }
+
+            updateMapMarkers();
+            entityCheckboxes.forEach(checkbox => {
+              checkbox.addEventListener('change', updateMapMarkers);
+            });
+          },
+          error: function(error) {
+            console.error("Erreur de parsing CSV :", error);
+          }
+        });
+      } catch (error) {
+        console.error("Erreur lors de la récupération du CSV :", error);
+      }
+    }
+  </script>
+</head>
+<body onload="initMap()">
+    <div id="entity-filter">
+        <h3>Filtrer par entité :</h3>
+    </div>
+  <div id="map"></div>
+</body>
+</html>
