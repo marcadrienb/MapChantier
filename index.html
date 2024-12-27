@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Carte des adresses</title>
+  <title>Carte des chantiers</title>
   <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE"></script>
   <script>
     async function initMap() {
@@ -17,15 +17,15 @@
 
       // Initialiser la carte
       const map = new google.maps.Map(document.getElementById("map"), {
-        center: { lat: 46.5191, lng: 6.5668 }, // Suisse comme centre initial
+        center: { lat: 46.5191, lng: 6.5668 }, // Centre initial (Suisse)
         zoom: 8,
       });
 
       // Associer les entités à des couleurs
       const couleursEntites = {
-        "Entité A": "red",
-        "Entité B": "blue",
-        "Entité C": "green",
+        "100 - PHIDA ETANCHEITE VD": "red",
+        "200 - Autre entité": "blue",
+        "300 - Entité C": "green",
       };
 
       // Parcourir chaque ligne du CSV pour créer des marqueurs
@@ -35,8 +35,8 @@
         // Extraire les données nécessaires
         const latitude = parseFloat(cols[5]); // Colonne Latitude
         const longitude = parseFloat(cols[6]); // Colonne Longitude
-        const valeur = cols[8]; // Colonne CA+0
-        const entite = cols[7]; // Colonne Entité
+        const valeur = cols[9]; // Colonne CA+0
+        const entite = cols[8]; // Colonne Entité
 
         // Vérifier que les coordonnées sont valides
         if (!isNaN(latitude) && !isNaN(longitude)) {
