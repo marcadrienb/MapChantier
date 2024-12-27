@@ -1,306 +1,97 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Carte des chantiers</title>
-  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=geometry" async defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <style>
-    #map {
-      height: 80vh;
-      width: 100%;
-    }
-    #entity-filter {
-        padding: 10px;
-        border-bottom: 1px solid #ccc;
-        margin-bottom: 10px;
-    }
-  </style>
-  <script>
-    async function initMap() {
-      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
-
-      try {
-        const response = await fetch(csvUrl);
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP : ${response.status}`);
+    <title>Carte des chantiers</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY&libraries=geometry" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
         }
-        const csvData = await response.text();
+    </style>
+    <script>
+        async function initMap() {
+            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
 
-        Papa.parse(csvData, {
-          header: true,
-          dynamicTyping: true,
-          complete: function(results) {
-            const data = results.data;
+            try {
+                const response = await fetch(csvUrl);
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP : ${response.status}`);
+                }
+                const csvData = await response.text();
 
-            const map = new google.maps.Map(document.getElementById("map"), {
-              center: { lat: 46.5191, lng: 6.5668 }, // Centre par défaut
-              zoom: 8, // Zoom initial
-            });
+                Papa.parse(csvData, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        const data = results.data;
+                        console.log("Données CSV parsées :", data);
 
-            const couleursEntites = {
-              "100 - PHIDA ETANCHEITE VD": "red",
-              "200 - Autre entité": "blue",
-              "300 - Entité C": "green",
-            };
+                        const map = new google.maps.Map(document.getElementById("map"), {
+                            center: { lat: 46.5191, lng: 6.5668 },
+                            zoom: 8,
+                        });
 
-            let currentMarkers = [];
+                        const couleursEntites = {
+                            "100 - PHIDA ETANCHEITE VD": "red",
+                            "200 - Autre entité": "blue",
+                            "300 - Entité C": "green",
+                        };
 
-            const entityFilterDiv = document.getElementById('entity-filter');
+                        let latLngBounds = new google.maps.LatLngBounds();
 
-            function createFilterCheckboxes() {
-              const uniqueEntities = [...new Set(data.map(row => row.Entité).filter(Boolean))];
+                        data.forEach(row => {
+                            if (row && !isNaN(row.Latitude) && !isNaN(row.Longitude)) { // Vérification que la ligne n'est pas vide
+                                try {
+                                    let latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
+                                    latLngBounds.extend(latLng);
 
-                uniqueEntities.forEach(entity => {
-                    const label = document.createElement('label');
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.value = entity;
-                    checkbox.checked = true;
-                    label.appendChild(checkbox);
-                    label.appendChild(document.createTextNode(` ${entity}`));
-                    entityFilterDiv.appendChild(label);
-                    entityFilterDiv.appendChild(document.createElement('br'));
+                                    const marker = new google.maps.Marker({
+                                        position: latLng,
+                                        map: map,
+                                        title: `N° Chantier : ${row["N° de chantier"]}`,
+                                        icon: {
+                                            path: google.maps.SymbolPath.CIRCLE,
+                                            scale: 10,
+                                            fillColor: couleursEntites[row.Entité] || "gray",
+                                            fillOpacity: 1,
+                                            strokeWeight: 1,
+                                        },
+                                    });
+
+                                    const infoWindowContent = `
+                                        <div style="padding: 10px;">
+                                            <h3>N° Chantier : ${row["N° de chantier"]}</h3>
+                                            <p><b>Valeur :</b> ${row["CA+0"]}</p>
+                                            <p><b>Entité :</b> ${row.Entité}</p>
+                                            <p><b>Entretien :</b> ${row.Entretien}</p>
+                                        </div>
+                                    `;
+
+                                    const infoWindow = new google.maps.InfoWindow({
+                                        content: infoWindowContent,
+                                    });
+
+                                    marker.addListener("click", () => infoWindow.open(map, marker));
+                                } catch (error) {
+                                    console.error(`Erreur lors de la création du marqueur : ${error}, pour les coordonnées : Latitude ${row.Latitude}, Longitude ${row.Longitude}`);
+                                }
+                            }
+                        });
+                        map.fitBounds(latLngBounds);
+                    },
+                    error: function(error) {
+                        console.error("Erreur de parsing CSV :", error);
+                    }
                 });
+            } catch (error) {
+                console.error("Erreur lors de la récupération du CSV :", error);
             }
-
-            createFilterCheckboxes();
-
-            const entityCheckboxes = document.querySelectorAll('#entity-filter input[type="checkbox"]');
-
-            function updateMapMarkers() {
-              currentMarkers.forEach(marker => marker.setMap(null));
-              currentMarkers = [];
-
-              const selectedEntities = Array.from(entityCheckboxes)
-                .filter(checkbox => checkbox.checked)
-                .map(checkbox => checkbox.value);
-
-              const filteredData = data.filter(row => row && row.Entité && selectedEntities.includes(row.Entité) && !isNaN(row.Latitude) && !isNaN(row.Longitude));
-
-              filteredData.forEach(row => {
-                const latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
-                const entity = row.Entité;
-
-                const marker = new google.maps.Marker({
-                  position: latLng,
-                  map: map,
-                  title: `N° Chantier : ${row["N° de chantier"]}`,
-                  icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 10,
-                    fillColor: couleursEntites[entity] || "gray",
-                    fillOpacity: 1,
-                    strokeWeight: 1,
-                  },
-                });
-
-                currentMarkers.push(marker);
-
-                const infoWindowContent = `
-                  <div style="padding: 10px;">
-                    <h3>N° Chantier : ${row["N° de chantier"]}</h3>
-                    <p><b>Valeur :</b> ${row["CA+0"]}</p>
-                    <p><b>Entité :</b> ${row.Entité}</p>
-                    <p><b>Entretien :</b> ${row.Entretien}</p>
-                  </div>
-                `;
-
-                const infoWindow = new google.maps.InfoWindow({
-                  content: infoWindowContent,
-                });
-
-                marker.addListener("click", () => infoWindow.open(map, marker));
-              });
-            }
-
-            updateMapMarkers();
-            entityCheckboxes.forEach(checkbox => {
-              checkbox.addEventListener('change', updateMapMarkers);
-            });
-          },
-          error: function(error) {
-            console.error("Erreur de parsing CSV :", error);
-          }
-        });
-      } catch (error) {
-        console.error("Erreur lors de la récupération du CSV :", error);
-      }
-    }
-  </script>
+        }
+    </script>
 </head>
 <body onload="initMap()">
-    <div id="entity-filter">
-        <h3>Filtrer par entité :</h3>
-    </div>
-  <div id="map"></div>
-</body>
-</html><!DOCTYPE html>
-<html>
-<head>
-  <title>Carte des chantiers</title>
-  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
-  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <style>
-    #map {
-      height: 80vh; /* Réduit la hauteur pour laisser de la place au filtre */
-      width: 100%;
-    }
-    #entity-filter {
-        padding: 10px;
-        border-bottom: 1px solid #ccc;
-        margin-bottom: 10px;
-    }
-  </style>
-  <script>
-    async function initMap() {
-      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
-
-      try {
-        const response = await fetch(csvUrl);
-        if (!response.ok) {
-          throw new Error(`Erreur HTTP : ${response.status}`);
-        }
-        const csvData = await response.text();
-
-        Papa.parse(csvData, {
-          header: true,
-          dynamicTyping: true,
-          complete: function(results) {
-            const data = results.data;
-
-            const map = new google.maps.Map(document.getElementById("map"), {
-              zoom: 8,
-            });
-
-            const couleursEntites = {
-              "100 - PHIDA ETANCHEITE VD": "red",
-              "200 - Autre entité": "blue",
-              "300 - Entité C": "green",
-            };
-
-            const entityMarkers = {};
-            let mostAddressesEntity = null;
-            let maxAddressesCount = 0;
-            let currentMarkers = []; // Tableau pour stocker les marqueurs actuels
-
-            const entityFilterDiv = document.getElementById('entity-filter');
-
-            function createFilterCheckboxes() {
-              const uniqueEntities = [...new Set(data.map(row => row.Entité).filter(Boolean))]; // Récupérer les entités uniques
-
-                uniqueEntities.forEach(entity => {
-                    const label = document.createElement('label');
-                    const checkbox = document.createElement('input');
-                    checkbox.type = 'checkbox';
-                    checkbox.value = entity;
-                    checkbox.checked = true; // Toutes les entités cochées par défaut
-                    label.appendChild(checkbox);
-                    label.appendChild(document.createTextNode(` ${entity}`));
-                    entityFilterDiv.appendChild(label);
-                    entityFilterDiv.appendChild(document.createElement('br'));
-                });
-            }
-
-            createFilterCheckboxes();
-
-            const entityCheckboxes = document.querySelectorAll('#entity-filter input[type="checkbox"]');
-
-            function updateMapMarkers() {
-              // Supprimer les marqueurs actuels
-              currentMarkers.forEach(marker => marker.setMap(null));
-              currentMarkers = [];
-
-              const selectedEntities = Array.from(entityCheckboxes)
-                .filter(checkbox => checkbox.checked)
-                .map(checkbox => checkbox.value);
-
-              const filteredData = data.filter(row => row && row.Entité && selectedEntities.includes(row.Entité) && !isNaN(row.Latitude) && !isNaN(row.Longitude));
-
-                // Réinitialiser les variables pour le centrage
-                mostAddressesEntity = null;
-                maxAddressesCount = 0;
-                entityMarkers = {};
-
-              filteredData.forEach(row => {
-                const latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
-                const entity = row.Entité;
-
-                  if (!entityMarkers[entity]) {
-                    entityMarkers[entity] = { markers: [], count: 0 };
-                  }
-
-                  entityMarkers[entity].markers.push(latLng);
-                  entityMarkers[entity].count++;
-
-                  if (entityMarkers[entity].count > maxAddressesCount) {
-                      maxAddressesCount = entityMarkers[entity].count;
-                      mostAddressesEntity = entity;
-                  }
-
-                const marker = new google.maps.Marker({
-                  position: latLng,
-                  map: map,
-                  title: `N° Chantier : ${row["N° de chantier"]}`,
-                  icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 10,
-                    fillColor: couleursEntites[entity] || "gray",
-                    fillOpacity: 1,
-                    strokeWeight: 1,
-                  },
-                });
-
-                currentMarkers.push(marker); // Ajouter le marqueur au tableau
-
-                const infoWindowContent = `
-                  <div style="padding: 10px;">
-                    <h3>N° Chantier : ${row["N° de chantier"]}</h3>
-                    <p><b>Valeur :</b> ${row["CA+0"]}</p>
-                    <p><b>Entité :</b> ${row.Entité}</p>
-                    <p><b>Entretien :</b> ${row.Entretien}</p>
-                  </div>
-                `;
-
-                const infoWindow = new google.maps.InfoWindow({
-                  content: infoWindowContent,
-                });
-
-                marker.addListener("click", () => infoWindow.open(map, marker));
-              });
-                if (mostAddressesEntity) {
-                    const bounds = new google.maps.LatLngBounds();
-                    entityMarkers[mostAddressesEntity].markers.forEach(latLng => bounds.extend(latLng));
-                    map.fitBounds(bounds);
-                } else if (filteredData.length > 0) {
-                    // Si aucune entité n'a le plus de marqueurs mais qu'il y a des marqueurs, on les affiche tous
-                    const bounds = new google.maps.LatLngBounds();
-                    filteredData.forEach(row => bounds.extend({lat: row.Latitude, lng: row.Longitude}));
-                    map.fitBounds(bounds);
-                }
-                else {
-                    map.setCenter({ lat: 46.5191, lng: 6.5668 }); // Centre par défaut si aucune donnée filtrée
-                }
-            }
-
-            updateMapMarkers();
-            entityCheckboxes.forEach(checkbox => {
-              checkbox.addEventListener('change', updateMapMarkers);
-            });
-          },
-          error: function(error) {
-            console.error("Erreur de parsing CSV :", error);
-          }
-        });
-      } catch (error) {
-        console.error("Erreur lors de la récupération du CSV :", error);
-      }
-    }
-  </script>
-</head>
-<body onload="initMap()">
-    <div id="entity-filter">
-        <h3>Filtrer par entité :</h3>
-    </div>
-  <div id="map"></div>
+    <div id="map"></div>
 </body>
 </html>
