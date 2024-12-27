@@ -5,89 +5,83 @@
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
     <style>
-        #container { /* Conteneur principal pour la carte et le menu */
-            display: flex;
-            height: 100vh;
-        }
-        #map {
-            flex: 1; /* La carte prend l'espace disponible */
-            height: 100%;
-        }
-        #menu {
-            width: 300px; /* Largeur fixe pour le menu */
-            overflow-y: auto;
-            padding: 10px;
-            border-left: 1px solid #ccc; /* Bordure pour séparer la carte et le menu */
-        }
-        /* ... (autres styles inchangés) */
+        /* ... (styles CSS inchangés) */
     </style>
 </head>
 <body onload="initMap()">
-    <div id="container"> <div id="map"></div>
+    <div id="container">
+        <div id="map"></div>
         <div id="menu"></div>
     </div>
     <script>
-        // ... (variables et fonctions inchangées)
+        let map;
+        let markers = [];
+        let data;
+        let couleursEntites = {};
 
         async function initMap() {
-            // ... (récupération et parsing du CSV inchangés)
+            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
 
-            Papa.parse(csvText, {
-                // ...
-                complete: function(results) {
-                    data = results.data;
-                    data = data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
+            try {
+                const response = await fetch(csvUrl);
+                if (!response.ok) {
+                    throw new Error(`Erreur HTTP : ${response.status}`);
+                }
+                const csvText = await response.text(); // Déclaration et assignation CORRECTES
 
-                    if (data.length === 0) {
-                        console.error("Aucune donnée valide trouvée dans le CSV.");
-                        return;
-                    }
+                Papa.parse(csvText, {
+                    header: true,
+                    dynamicTyping: true,
+                    complete: function(results) {
+                        data = results.data;
 
-                    const entites = [...new Set(data.map(item => item.Entité))];
-                    entites.forEach((entite, index) => {
-                        couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
-                    });
+                        data = data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
 
-                    // Calculer le centre de la carte en fonction des données
-                    const bounds = new google.maps.LatLngBounds();
-                    data.forEach(row => {
-                      bounds.extend(new google.maps.LatLng(row.Latitude, row.Longitude));
-                    });
-
-                    map = new google.maps.Map(document.getElementById("map"), {
-                        center: bounds.getCenter(), // Centre la carte sur le centre des données
-                        zoom: calculateZoom(bounds), // Ajuste le zoom en fonction des données
-                        restriction: {
-                            latLngBounds: {
-                                north: 47.8084,
-                                south: 45.818,
-                                west: 5.9559,
-                                east: 10.4921,
-                            },
-                            strictBounds: true,
+                        if (data.length === 0) {
+                            console.error("Aucune donnée valide trouvée dans le CSV.");
+                            return;
                         }
-                    });
 
-                    createMarkers(data);
-                    createMenu();
-                },
-                // ...
-            });
-        }
+                        const entites = [...new Set(data.map(item => item.Entité))];
+                        entites.forEach((entite, index) => {
+                            couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
+                        });
 
-        function calculateZoom(bounds) {
-            const worldBounds = new google.maps.LatLngBounds(
-                new google.maps.LatLng(-85, -180),
-                new google.maps.LatLng(85, 180)
-            );
+                        const bounds = new google.maps.LatLngBounds();
+                        data.forEach(row => {
+                            bounds.extend(new google.maps.LatLng(row.Latitude, row.Longitude));
+                        });
 
-            if (worldBounds.equals(bounds)) {
-                return 2; // Zoom par défaut pour le monde entier
+                        map = new google.maps.Map(document.getElementById("map"), {
+                            center: bounds.getCenter(),
+                            zoom: calculateZoom(bounds),
+                            restriction: {
+                                latLngBounds: {
+                                    north: 47.8084,
+                                    south: 45.818,
+                                    west: 5.9559,
+                                    east: 10.4921,
+                                },
+                                strictBounds: true,
+                            }
+                        });
+
+                        createMarkers(data);
+                        createMenu();
+                    },
+                    error: function(error) {
+                        console.error("Erreur de parsing CSV :", error);
+                    }
+                });
+            } catch (error) {
+                console.error("Erreur lors de la récupération du CSV :", error);
             }
-            return map.fitBounds(bounds);
         }
 
-        // ... (autres fonctions inchangées)
+        function calculateZoom(bounds) { /* ... (fonction inchangée) */ }
+        function createMarkers(data) { /* ... (fonction inchangée) */ }
+        function createMenu() { /* ... (fonction inchangée) */ }
+        function filterMarkers() { /* ... (fonction inchangée) */ }
     </script>
 </body>
 </html>
