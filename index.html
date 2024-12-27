@@ -1,178 +1,161 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Carte des chantiers</title>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
-    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-    <script src="https://unpkg.com/geolib@3.3.3/dist/geolib.min.js"></script> <style>
-        #map {
-            height: 80vh;
-            width: 100%;
-        }
-        #menu {
-            height: 20vh;
-            overflow-y: auto;
-            padding: 10px;
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-around;
-        }
-        .checkbox-container {
-            margin-bottom: 5px;
-            min-width: 150px;
-        }
-        .legend {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-        }
-        .legend-color {
-            width: 20px;
-            height: 20px;
-            margin-right: 5px;
-            border-radius: 50%;
-        }
-    </style>
+  <title>Carte des chantiers</title>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBSm9kfPQqWWck-16_y5OUz1ObSyHmknWE&libraries=geometry" async defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    #map {
+      height: 80vh;
+      width: 100%;
+    }
+    #menu {
+      height: 20vh;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+    }
+    .checkbox-container {
+      margin-bottom: 5px;
+      min-width: 150px;
+    }
+    .legend {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      margin-right: 5px;
+      border-radius: 50%;
+    }
+  </style>
 </head>
 <body onload="initMap()">
-    <div id="map"></div>
-    <div id="menu"></div>
-    <script>
-        let map;
-        let markers = [];
-        let data;
-        let couleursEntites = {};
+  <div id="map"></div>
+  <div id="menu"></div>
+  <script>
+    let map;
+    let markers = [];
+    let data;
+    let couleursEntites = {};
 
-        function getLatLngBounds(center, radius) {
-            const north = geolib.computeDestinationPoint(center, radius, 0);
-            const east = geolib.computeDestinationPoint(center, radius, 90);
-            const south = geolib.computeDestinationPoint(center, radius, 180);
-            const west = geolib.computeDestinationPoint(center, radius, 270);
+    async function initMap() {
+      const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
 
-            return {
-                north: north.latitude,
-                east: east.longitude,
-                south: south.latitude,
-                west: west.longitude,
-            };
+      try {
+        const response = await fetch(csvUrl);
+        if (!response.ok) {
+          throw new Error(`Erreur HTTP : ${response.status}`);
         }
+        const csvText = await response.text();
 
-        async function initMap() {
-            const csvUrl = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRAnlvX5DBICbNnV01Eutb1t0dPTJqHFvvePxgfWXEqEg7AHsMBPsiLNg4FI-aFYnChf4MJdg3IcHOb/pub?output=csv";
+        Papa.parse(csvText, {
+          header: true,
+          dynamicTyping: true,
+          complete: function(results) {
+            data = results.data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
 
-            try {
-                const response = await fetch(csvUrl);
-                if (!response.ok) {
-                    throw new Error(`Erreur HTTP : ${response.status}`);
-                }
-                const csvText = await response.text();
-
-                Papa.parse(csvText, {
-                    header: true,
-                    dynamicTyping: true,
-                    complete: function(results) {
-                        data = results.data.filter(row => row && !isNaN(row.Latitude) && !isNaN(row.Longitude) && row.Entité);
-
-                        if (data.length === 0) {
-                            console.error("Aucune donnée valide trouvée dans le CSV.");
-                            return;
-                        }
-
-                        const entites = [...new Set(data.map(item => item.Entité))];
-                        entites.forEach((entite, index) => {
-                            couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
-                        });
-
-                        const lausanne = { latitude: 46.5196535, longitude: 6.6322734 };
-                        const bounds = getLatLngBounds(lausanne, 250000); // 250 km en mètres
-
-                        map = new google.maps.Map(document.getElementById("map"), {
-                            center: lausanne,
-                            zoom: 8, // Ajuster le zoom initial pour voir la zone étendue
-                            restriction: {
-                                latLngBounds: {
-                                    north: bounds.north,
-                                    south: bounds.south,
-                                    west: bounds.west,
-                                    east: bounds.east,
-                                },
-                                strictBounds: true,
-                            }
-                        });
-
-                        createMarkers(data);
-                        createMenu();
-                    },
-                    error: function(error) {
-                        console.error("Erreur de parsing CSV :", error);
-                    }
-                });
-            } catch (error) {
-                console.error("Erreur lors de la récupération du CSV :", error);
+            if (data.length === 0) {
+              console.error("Aucune donnée valide trouvée dans le CSV.");
+              return;
             }
-        }
 
-        // ... (les fonctions createMarkers, createMenu et filterMarkers restent inchangées)
-        function createMarkers(data) {
-        const latLngBounds = new google.maps.LatLngBounds();
-        const infoWindow = new google.maps.InfoWindow();
+            const entites = [...new Set(data.map(item => item.Entité))];
+            entites.forEach((entite, index) => {
+              couleursEntites[entite] = `hsl(${index * 360 / entites.length}, 100%, 50%)`;
+            });
 
-        data.forEach(row => {
-            const latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
-            latLngBounds.extend(latLng);
-
-            const marker = new google.maps.Marker({
-                position: latLng,
-                map,
-                title: `N° Chantier : ${row["N° de chantier"]}`,
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: Math.sqrt(row["CA+0"] / 100000) * 5 || 5,
-                    fillColor: couleursEntites[row.Entité],
-                    fillOpacity: 0.7,
-                    strokeWeight: 1,
+            map = new google.maps.Map(document.getElementById("map"), {
+              center: { lat: 46.5196535, lng: 6.6322734 }, // Lausanne
+              zoom: 12,
+              restriction: {
+                latLngBounds: {
+                  north: 47.8084,
+                  south: 45.818,
+                  west: 5.9559,
+                  east: 10.4921,
                 },
+                strictBounds: true,
+              }
             });
 
-            marker.addListener("click", () => {
-                let infoWindowContent = `<div style="padding: 10px;">`;
-                for (const key in row) {
-                    if (row.hasOwnProperty(key)) {
-                        infoWindowContent += `<p><b>${key}:</b> ${row[key]}</p>`;
-                    }
-                }
-                infoWindowContent += `</div>`;
-                infoWindow.setContent(infoWindowContent);
-                infoWindow.open(map, marker);
-            });
-
-            markers.push(marker);
+            createMarkers(data);
+            createMenu();
+          },
+          error: function(error) {
+            console.error("Erreur de parsing CSV :", error);
+          }
         });
-        // map.fitBounds(latLngBounds); // Retirer car la restriction est maintenant gérée avec geolib
+      } catch (error) {
+        console.error("Erreur lors de la récupération du CSV :", error);
+      }
+    }
+
+    function createMarkers(data) {
+      const latLngBounds = new google.maps.LatLngBounds();
+      const infoWindow = new google.maps.InfoWindow(); // Créer une seule info-bulle
+
+      data.forEach(row => {
+        const latLng = new google.maps.LatLng(row.Latitude, row.Longitude);
+        latLngBounds.extend(latLng);
+
+        const marker = new google.maps.Marker({
+          position: latLng,
+          map, // Shorthand pour map: map
+          title: `N° Chantier : ${row["N° de chantier"]}`,
+          icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: Math.sqrt(row["CA+0"] / 100000) * 5 || 5,
+            fillColor: couleursEntites[row.Entité],
+            fillOpacity: 0.7,
+            strokeWeight: 1,
+          },
+        });
+
+        marker.addListener("click", () => {
+          let infoWindowContent = `<div style="padding: 10px;">`;
+          for (const key in row) {
+            if (row.hasOwnProperty(key)) {
+              infoWindowContent += `<p><b>${key}:</b> ${row[key]}</p>`;
+            }
+          }
+          infoWindowContent += `</div>`;
+          infoWindow.setContent(infoWindowContent); // Mettre à jour le contenu
+          infoWindow.open(map, marker);
+        });
+
+        markers.push(marker);
+      });
+
+      map.fitBounds(latLngBounds);
     }
 
     function createMenu() {
-        const menu = document.getElementById('menu');
-        menu.innerHTML = "";
+      const menu = document.getElementById('menu');
+      menu.innerHTML = "";
 
-        const entites = Object.keys(couleursEntites);
-        entites.forEach(entite => {
-            const checkboxContainer = document.createElement('div');
-            checkboxContainer.className = 'checkbox-container';
+      const entites = Object.keys(couleursEntites);
+      entites.forEach(entite => {
+        const checkboxContainer = document.createElement('div');
+        checkboxContainer.className = 'checkbox-container';
 
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.id = entite;
-            checkbox.checked = true;
-            checkbox.addEventListener('change', filterMarkers);
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = entite;
+        checkbox.checked = true;
+        checkbox.addEventListener('change', filterMarkers);
 
-            const label = document.createElement('label');
-            label.htmlFor = entite;
-            label.textContent = entite;
+        const label = document.createElement('label');
+        label.htmlFor = entite;
+        label.textContent = entite;
 
-            checkboxContainer.append(checkbox, label);
-            menu.appendChild(checkboxContainer);
-        });
+        checkboxContainer.append(checkbox, label); // Utilisation de append pour simplifier
+        menu.appendChild(checkboxContainer);
+      });
 
         const legendDiv = document.createElement('div');
         legendDiv.innerHTML = "<h3>Légende des entités:</h3>";
@@ -186,13 +169,13 @@
     }
 
     function filterMarkers() {
-        const checkedEntites = Array.from(document.querySelectorAll('#menu input:checked')).map(input => input.id);
+      const checkedEntites = Array.from(document.querySelectorAll('#menu input:checked')).map(input => input.id);
 
-        markers.forEach((marker, index) => {
-            const row = data[index];
-            marker.setVisible(row && checkedEntites.includes(row.Entité));
-        });
+      markers.forEach((marker, index) => {
+        const row = data[index];
+        marker.setVisible(row && checkedEntites.includes(row.Entité)); // Condition simplifiée
+      });
     }
-    </script>
+  </script>
 </body>
 </html>
